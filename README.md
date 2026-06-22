@@ -1,5 +1,10 @@
 # Outil de monitoring sous R
 
+| Graphes                             | Matrice de confusion                | Aide pour le choix du seuil de confiance |
+| ----------------------------------- | ----------------------------------- | ---------------------------------------- |
+| <img src="./img/image_1.png" alt="image_1" width="300"/> | <img src="./img/image_2.png" alt="image_1" width="300"/> | <img src="./img/image_3.png" alt="image_1" width="300"/>
+
+
 ## Onglet Administration
 
 ### Import des données
