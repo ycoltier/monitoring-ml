@@ -29,7 +29,8 @@ compute_metrics_par_seuil <- function(
     nb_points = 100,
     tx_erreur_humaine = 0,
     volume_globale = 100,
-    tx_recours_liste = 0
+    tx_recours_liste = 0,
+    seed = 42
 ) {
   
   seuils <- seq(seuil_min, seuil_max, by = 1 / nb_points)
@@ -41,6 +42,38 @@ compute_metrics_par_seuil <- function(
   prediction_niv <- truncate_positions(df$prediction, niveau)
   classes        <- sort(unique(target_niv))
   correct        <- target_niv == prediction_niv
+
+  # --- Simulation du re-codage humain -------------------------------
+  # Simulée UNE SEULE FOIS hors de la boucle sur les seuils : chaque
+  # observation a un destin fixe (reprise correcte ou erreur simulée).
+  # L'erreur simulée est un code de nomenclature valide (une classe de
+  # `classes`) DIFFÉRENT du code vrai : sinon l'erreur se compense et le
+  # taux d'erreur simulé serait sous-estimé.
+  recodage_humain <- target_niv
+  if (tx_erreur_humaine > 0 && length(classes) > 1) {
+    seed_saved <- .Random.seed
+    if (!is.null(seed)) set.seed(seed)
+    n_obs <- length(df$score)
+    err   <- runif(n_obs) < tx_erreur_humaine
+    if (any(err)) {
+      k   <- length(classes)
+      idx_true <- match(target_niv, classes)
+      draws    <- sample(k, sum(err), replace = TRUE)
+      # Si le tirage tombe sur la classe vraie, on décale d'un rang pour
+      # garantir une classe différente (cercle modulo k).
+      fix    <- (draws - 1) %% k + 1
+      draws[draws == idx_true[err]] <- fix[draws == idx_true[err]]
+      recodage_humain[err] <- classes[draws]
+    }
+    # Si length(classes) == 1, une erreur devrait être un code différent
+    # de la classe vraie, ce qui est impossible : on laisse l'observation
+    # correctement re-codée (pas d'erreur simulée).
+    
+    # Restauration explicite de l'état du RNG (le snapshot est fait en
+    # tête de bloc). Les handlers on.exit ne survivant pas à la fin du
+    # bloc if, on restaure à la main.
+    .Random.seed <- seed_saved
+  }
   
   results <- lapply(seuils, function(s) {
     
@@ -51,16 +84,9 @@ compute_metrics_par_seuil <- function(
       1 - sum(df$weight[idx_reprise & correct_brut]) / sum(df$weight[idx_reprise])
     }
     
-    # Prédiction ajustée selon le seuil
-    pred_adj <- ifelse(
-      df$score >= s,
-      prediction_niv,
-      ifelse(
-        runif(length(df$score)) > tx_erreur_humaine,
-        target_niv,
-        sample(classes, length(df$score), replace = TRUE)
-      )
-    )
+    # Prédiction ajustée selon le seuil : auto (score >= s) ou re-codage
+    # humain simulé, précalculé une fois pour toutes hors de la boucle.
+    pred_adj <- ifelse(df$score >= s, prediction_niv, recodage_humain)
     idx_auto <- df$score >= s
     
     # --- Métriques pour accuracy_codages_auto_variation_seuil ---
