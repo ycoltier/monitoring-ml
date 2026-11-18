@@ -64,6 +64,13 @@ conf_mat_plot <- function(df,
 
 # Calcul métriques
 
+# nettoyage des variables contenant le code de la nomenclature
+clean_code_column <- function(x) {
+  x <- as.character(x)
+  x <- trimws(x)          # supprime espaces avant/après
+  x
+}
+
 # Normalize code and truncate positions
 truncate_positions <- function(code, threshold = 4) {
   # Vectorisation native
