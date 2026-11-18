@@ -102,7 +102,11 @@ server <- function(input, output, session) {
           score = input$rename_score,
           weight = input$rename_weight
         ) %>%
-        dplyr::select(prediction, target, score, weight)
+        dplyr::select(prediction, target, score, weight)%>%
+        dplyr::mutate(
+          prediction = clean_code_column(prediction),
+          target     = clean_code_column(target)
+        )
     }, error = function(e) {
       output$check_result <- renderText(
         "⚠️ Problème dans la sélection des variables !"
@@ -114,18 +118,37 @@ server <- function(input, output, session) {
     
     missing_cols <- setdiff(required_columns, colnames(df))
     
+    code_too_long <- if (length(missing_cols) == 0) {
+      df %>% filter(nchar(target) > 4 | nchar(prediction) > 4)
+    } else {
+      df[0, ]
+    }
+    
     na_par_col <- sapply(df[required_columns], compter_valeurs_manquantes)
     
     cols_avec_na <- na_par_col[na_par_col > 0]
     
     if (length(missing_cols) > 0) {
+
       output$check_result <- renderText({
         paste("⚠️ Colonnes manquantes :", paste(missing_cols, collapse = ", "))
       })
       disable("loadDataLocal")
       disable("sigle_enquete")
       data_treat(NULL)
+
+    } else if (nrow(code_too_long) > 0) {
+      output$check_result <- renderText(paste0(
+        "⚠️ Import bloqué : des codes dépassent 4 caractères (",
+        nrow(code_too_long), " ligne(s)).\n",
+        "Vérifiez la colonne source utilisée pour 'target'/'prediction'."
+      ))
+      disable("loadDataLocal")
+      disable("sigle_enquete")
+      data_treat(NULL)
+      
     } else if (length(cols_avec_na) > 0) {
+
       output$check_result <- renderText(paste0(
         "⚠️ Import bloqué : valeurs manquantes ou vides détectées :\n",
         paste0("  - ", names(cols_avec_na), " : ", cols_avec_na, " valeur(s)", collapse = "\n"),
@@ -134,13 +157,16 @@ server <- function(input, output, session) {
       disable("loadDataLocal")
       disable("sigle_enquete")
       data_treat(NULL)
+
     } else {
+
       output$check_result <- renderText({
         "✅ Toutes les colonnes requises sont présentes !"
       })
       enable("loadDataLocal")
       enable("sigle_enquete")
       data_treat(df)
+
     }
   })
   
